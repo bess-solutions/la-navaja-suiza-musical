@@ -32,19 +32,29 @@ async function robot() {
   }
 
   async function fetchGoogleAndReturnImagesLinks(query) {
-    const response = await customSearch.cse.list({
-      auth: googleSearchCredentials.apiKey,
-      cx: googleSearchCredentials.searchEngineId,
-      q: query,
-      searchType: 'image',
-      num: 2
-    })
+    try {
+      const response = await customSearch.cse.list({
+        auth: googleSearchCredentials.apiKey,
+        cx: googleSearchCredentials.searchEngineId,
+        q: query,
+        searchType: 'image',
+        num: 2
+      })
 
-    const imagesUrl = response.data.items.map((item) => {
-      return item.link
-    })
+      const imagesUrl = response.data.items.map((item) => {
+        return item.link
+      })
 
-    return imagesUrl
+      return imagesUrl
+    } catch (error) {
+      console.log(`> [image-robot] Error con Google API. Usando imagen de respaldo para: ${query}`)
+      // Fallback images about hip hop / music using picsum to avoid duplicates and 404s
+      const randomSeed = Math.floor(Math.random() * 10000)
+      return [
+        `https://picsum.photos/seed/${randomSeed}/1920/1080`,
+        `https://picsum.photos/seed/${randomSeed+1}/1920/1080`
+      ]
+    }
   }
 
   async function downloadAllImages(content) {

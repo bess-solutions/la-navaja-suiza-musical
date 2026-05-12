@@ -1,0 +1,217 @@
+{
+  "name": "DaaS + YouTube Automation Total (Hasta que choque la micro)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days"
+            }
+          ]
+        }
+      },
+      "id": "trigger-diario",
+      "name": "Schedule (Diario)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 0, 0 ]
+    },
+    {
+      "parameters": {
+        "url": "https://trends.google.com/trends/trendingsearches/daily/rss?geo=US",
+        "options": {}
+      },
+      "id": "fetch-trends",
+      "name": "Fetch Google Trends",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 200, 0 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.first().json.rss.channel.item;\n// Tomamos la tendencia #1 del día\nconst topTrend = items[0].title;\nconst traffic = items[0]['ht:approx_traffic'];\nreturn [{ json: { trend: topTrend, traffic: traffic } }];"
+      },
+      "id": "parse-trend",
+      "name": "Extraer Top Tendencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 400, 0 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyC8jlE8oNdAbEM0WL_ctDJ2rdG_QQZ_ON4",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Eres un guionista y analista cuantitativo. La tendencia macro de hoy es: '\" + $json.trend + \"' con \" + $json.traffic + \" búsquedas. \\nDevuelve SOLO UN JSON válido con la siguiente estructura (este JSON alimentará el motor Node.js local):\\n{\\n  \\\"title\\\": \\\"Título clickbait para YouTube\\\",\\n  \\\"description\\\": \\\"Descripción del short con hooks\\\",\\n  \\\"script_lines\\\": [\\n    {\\\"text\\\": \\\"frase 1 del guion\\\"},\\n    {\\\"text\\\": \\\"frase 2 del guion\\\"}\\n  ]\\n}\"\n    }]\n  }]\n}",
+        "options": {}
+      },
+      "id": "gemini-analyst",
+      "name": "Gemini (Guion y Análisis)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 600, 0 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $input.first().json.candidates[0].content.parts[0].text;\nconst cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();\nconst videoData = JSON.parse(cleanJson);\nreturn [{ json: videoData }];"
+      },
+      "id": "parse-script",
+      "name": "Parsear Script",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 800, 0 ]
+    },
+    {
+      "parameters": {
+        "fileName": "C:/Users/lenovo/OneDrive/Desktop/TEST 003/video-maker/content/lyrics.json",
+        "fileContent": "={{JSON.stringify($json.script_lines)}}",
+        "options": {}
+      },
+      "id": "write-lyrics",
+      "name": "Guardar lyrics.json",
+      "type": "n8n-nodes-base.write",
+      "typeVersion": 1,
+      "position": [ 1000, -100 ]
+    },
+    {
+      "parameters": {
+        "fileName": "C:/Users/lenovo/OneDrive/Desktop/TEST 003/video-maker/content.json",
+        "fileContent": "={{JSON.stringify($json)}}",
+        "options": {}
+      },
+      "id": "write-content",
+      "name": "Guardar content.json",
+      "type": "n8n-nodes-base.write",
+      "typeVersion": 1,
+      "position": [ 1000, 100 ]
+    },
+    {
+      "parameters": {
+        "command": "node index.js",
+        "executeOnce": true,
+        "options": {
+          "cwd": "C:/Users/lenovo/OneDrive/Desktop/TEST 003/video-maker"
+        }
+      },
+      "id": "run-video-maker",
+      "name": "Ejecutar Motor Local (FFmpeg/Veo)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1200, 0 ]
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "title": "={{ $('Parsear Script').item.json.title }}",
+        "description": "={{ $('Parsear Script').item.json.description }}\\n\\n📈 Recibe alertas DaaS exclusivas antes que nadie:\\nhttps://tu-daas.com?utm_source=youtube&utm_campaign={{ $('Extraer Top Tendencia').item.json.trend }}",
+        "videoUrl": "C:/Users/lenovo/OneDrive/Desktop/TEST 003/video-maker/content/video_final.mp4",
+        "privacyStatus": "public",
+        "tags": ["shorts", "trends", "investing"],
+        "categoryId": "27"
+      },
+      "id": "youtube-upload",
+      "name": "Subir a YouTube Shorts",
+      "type": "n8n-nodes-base.youtube",
+      "typeVersion": 1,
+      "position": [ 1400, 0 ]
+    }
+  ],
+  "connections": {
+    "Schedule (Diario)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Google Trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Google Trends": {
+      "main": [
+        [
+          {
+            "node": "Extraer Top Tendencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Top Tendencia": {
+      "main": [
+        [
+          {
+            "node": "Gemini (Guion y Análisis)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini (Guion y Análisis)": {
+      "main": [
+        [
+          {
+            "node": "Parsear Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Script": {
+      "main": [
+        [
+          {
+            "node": "Guardar lyrics.json",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Guardar content.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar lyrics.json": {
+      "main": [
+        [
+          {
+            "node": "Ejecutar Motor Local (FFmpeg/Veo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar content.json": {
+      "main": [
+        [
+          {
+            "node": "Ejecutar Motor Local (FFmpeg/Veo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ejecutar Motor Local (FFmpeg/Veo)": {
+      "main": [
+        [
+          {
+            "node": "Subir a YouTube Shorts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

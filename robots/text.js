@@ -1,15 +1,6 @@
-const algorithmia = require('algorithmia')
-const algorithmiaApiKey = require('../credentials/algorithmia.json').apiKey
+// Removed wikipedia require
+const keywordExtractor = require('keyword-extractor');
 const sentenceBoundaryDetection = require('sbd')
-
-const watsonApiKey = require('../credentials/watson-nlu.json').apikey
-const NaturalLanguageUnderstandingV1 = require('watson-developer-cloud/natural-language-understanding/v1.js')
- 
-const nlu = new NaturalLanguageUnderstandingV1({
-  iam_apikey: watsonApiKey,
-  version: '2018-04-05',
-  url: 'https://gateway.watsonplatform.net/natural-language-understanding/api/'
-})
 
 const state = require('./state.js')
 
@@ -27,12 +18,19 @@ async function robot() {
 
   async function fetchContentFromWikipedia(content) {
     console.log('> [text-robot] Fetching content from Wikipedia')
-    const algorithmiaAuthenticated = algorithmia(algorithmiaApiKey)
-    const wikipediaAlgorithm = algorithmiaAuthenticated.algo('web/WikipediaParser/0.1.2')
-    const wikipediaResponse = await wikipediaAlgorithm.pipe(content.searchTerm)
-    const wikipediaContent = wikipediaResponse.get()
-
-    content.sourceContentOriginal = wikipediaContent.content
+    try {
+      const response = await fetch(`https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(content.searchTerm)}`, {
+        headers: {
+          'User-Agent': 'VideoMakerBot/1.0 (https://github.com/hebertlima) node-fetch'
+        }
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      content.sourceContentOriginal = data.extract || content.searchTerm;
+    } catch (error) {
+      console.log(`> [text-robot] Error fetching Wikipedia: ${error}`)
+      content.sourceContentOriginal = content.searchTerm
+    }
     console.log('> [text-robot] Fetching done!')
   }
 
@@ -92,23 +90,14 @@ async function robot() {
 
   async function fetchWatsonAndReturnKeywords(sentence) {
     return new Promise((resolve, reject) => {
-      nlu.analyze({
-        text: sentence,
-        features: {
-          keywords: {}
-        }
-      }, (error, response) => {
-        if (error) {
-          reject(error)
-          return
-        }
-
-        const keywords = response.keywords.map((keyword) => {
-          return keyword.text
-        })
-
-        resolve(keywords)
-      })
+      const keywords = keywordExtractor.extract(sentence, {
+        language: "english", // default fallback, could be parameterized
+        remove_digits: true,
+        return_changed_case: true,
+        remove_duplicates: true
+      });
+      // Return top 2-3 keywords to avoid too many generic words
+      resolve(keywords.slice(0, 3));
     })
   }
 
