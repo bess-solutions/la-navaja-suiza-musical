@@ -16,16 +16,34 @@ async function robot() {
     throw new Error("> [scriptwriter] No se encontró lyrics.json");
   }
 
-  const lyrics = JSON.parse(fs.readFileSync(lyricsPath, 'utf8'));
+  const data = JSON.parse(fs.readFileSync(lyricsPath, 'utf8'));
+  const lyrics = data.lyrics;
+  const voiceDescription = data.voice_description;
   console.log(`> [scriptwriter] Analizando ${lyrics.length} escenas de la letra...`);
+  console.log(`> [scriptwriter] Voz detectada: ${voiceDescription}`);
 
   const systemInstruction = `
-Eres un Director de Videoclips de Hip Hop Underground de élite.
-Tu objetivo es leer las letras de una canción y generar un guion técnico visual continuo y altamente detallado para un generador de video AI.
-REGLA DE ORO 1: CONSISTENCIA DE PERSONAJE. El video sigue a un protagonista fijo para mantener la consistencia. Descríbelo en CADA prompt como: "The Protagonist: A 25-year-old gritty Latin American male underground rapper, short fade haircut, wearing a baggy black hoodie, a silver chain, and dark baggy jeans". NO uses nombres reales.
-REGLA DE ORO 2: ESTILO VISUAL FIJO. Cada prompt debe terminar con el estilo: "Cinematic, raw 1990s underground hip-hop music video, shot on 16mm gritty film, heavy film grain, low budget street aesthetic, realistic Latin American urban decay. No glossy CGI, no modern neon."
-REGLA DE ORO 3: NARRATIVA. Crea una historia que fluya. Empezamos en un callejón, luego él camina, luego rapea a la cámara, interactúa con el entorno, etc. Las acciones deben reflejar la emoción de la letra.
-FORMATO: Devuelve estrictamente un array JSON válido, donde cada elemento sea el objeto original pero añadiendo la clave "prompt" con tus instrucciones de cámara y acción en inglés.
+Eres un Director de Cine y Videoclips de vanguardia de nivel Hollywood.
+Tu objetivo es analizar la letra y la descripción de la voz para crear un videoclip narrativo coherente y visualmente impactante.
+
+VOZ DEL ARTISTA: ${voiceDescription}
+
+PASO 1: Define al PROTAGONISTA MAESTRO:
+- Crea una descripción física ULTRA-DETALLADA (etnia, edad, ropa específica, accesorios, rasgos faciales) que coincida con la voz. 
+- Esta descripción DEBE repetirse en todos los prompts para mantener la consistencia.
+
+PASO 2: Define el ESTILO VISUAL:
+- Elige una estética cinematográfica (ej: Cyberpunk, Cine Noir, Vintage 70s, Realismo Épico) acorde al sentimiento de la letra.
+
+PASO 3: Genera un guion técnico.
+REGLA DE ORO 1: CONSISTENCIA. Cada "prompt" debe empezar describiendo al protagonista y el entorno para que la IA no invente personajes nuevos.
+REGLA DE ORO 2: LIP SYNC (CLAVE). Identifica las escenas donde la letra es intensa o el cantante debería estar interpretando a cámara. 
+    - Si "singing" es true, el prompt debe especificar "facing camera, singing, high detail on mouth".
+REGLA DE ORO 3: IDIOMA. Los prompts deben estar en INGLÉS técnico de cine.
+
+FORMATO DE SALIDA: Devuelve estrictamente un array JSON válido, donde cada elemento sea el objeto original pero añadiendo:
+- "prompt": Instrucciones en inglés.
+- "singing": boolean indicando si canta a cámara en ese clip.
 `;
 
   try {
@@ -34,7 +52,7 @@ FORMATO: Devuelve estrictamente un array JSON válido, donde cada elemento sea e
       contents: [{
         role: "user",
         parts: [
-          { text: "Aquí tienes el array JSON con la letra y los tiempos. Devuélvelo añadiendo el campo 'prompt' a cada objeto.\n\n" + JSON.stringify(lyrics) }
+          { text: "Genera el guion técnico maestro basado en esta letra:\n\n" + JSON.stringify(lyrics) }
         ]
       }],
       config: {
@@ -43,8 +61,7 @@ FORMATO: Devuelve estrictamente un array JSON válido, donde cada elemento sea e
       }
     });
 
-    const outputText = response.text;
-    const scriptJson = JSON.parse(outputText);
+    const scriptJson = JSON.parse(response.text);
     
     fs.writeFileSync(scriptPath, JSON.stringify(scriptJson, null, 2));
     console.log(`> [scriptwriter] ¡Guion técnico maestro escrito! Guardado en script.json.`);

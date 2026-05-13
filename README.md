@@ -1,7 +1,7 @@
 [![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/filipedeschamps/video-maker) 
 
-# video-maker
-Projeto open source para fazer vídeos automatizados
+# La Navaja Suiza Musical 🚀 - AI Video Pipeline
+Pipeline de generación de vídeos musicales automatizada con IA (Google Veo 3.1 + FFmpeg).
 
 # Pré requisitos
 

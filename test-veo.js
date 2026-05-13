@@ -1,8 +1,13 @@
-import { GoogleGenAI } from "@google/genai";
-import fs from "fs";
-import path from "path";
+require('dotenv').config();
+const { GoogleGenAI } = require("@google/genai");
+const fs = require("fs");
+const path = require("path");
 
-const apiKey = "AIzaSyAxg9pvy8AsYX2Ojh9jrc159vZ8TtjbFLM";
+const apiKey = process.env.GEMINI_API_KEY;
+if (!apiKey) {
+  console.error("🚨 Error: GEMINI_API_KEY no definida en .env");
+  process.exit(1);
+}
 const ai = new GoogleGenAI({ apiKey: apiKey });
 
 async function run() {
@@ -27,7 +32,7 @@ async function run() {
     // Poll the operation status until the video is ready.
     while (!operation.done) {
       console.log("Esperando a que Veo 3.1 genere el video (esto puede tomar varios minutos)...");
-      await new Promise((resolve) => setTimeout(resolve, 10000));
+      await new Promise((resolve) => setTimeout(resolve, 15000)); // Audit: 15s
       operation = await ai.operations.getVideosOperation({
         operation: operation,
       });
@@ -43,6 +48,9 @@ async function run() {
     console.log(`Video guardado en ./content/clip_0.mp4`);
   } catch (error) {
     console.error("Error al generar video:", error.message || error);
+    if (error.message.includes("429") || error.message.includes("403")) {
+        process.exit(1); // Audit: Emergency stop
+    }
   }
 }
 

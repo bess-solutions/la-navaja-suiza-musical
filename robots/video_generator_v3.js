@@ -1,24 +1,42 @@
+require('dotenv').config();
 const { GoogleGenAI } = require("@google/genai");
 const fs = require("fs");
 const path = require("path");
 
-const apiKey = "AIzaSyAxg9pvy8AsYX2Ojh9jrc159vZ8TtjbFLM";
+const apiKey = process.env.GEMINI_API_KEY;
+if (!apiKey) {
+  console.error("> [video-generator] 🚨 ERROR: No se encontró la GEMINI_API_KEY en el archivo .env");
+  process.exit(1);
+}
+
 const ai = new GoogleGenAI({ apiKey: apiKey });
 
+// CONFIGURACIÓN DE SEGURIDAD Y COSTOS
+const AUDIT_CONFIG = {
+  TEST_MODE: true,        // Si es true, solo procesa 1 clip y se detiene.
+  POLLING_INTERVAL: 15000, // 15 segundos entre chequeos de estado (Evita 429)
+  COOLDOWN_TIME: 30000,    // 30 segundos entre escenas
+  MAX_RETRIES: 2           // Máximo de reintentos por escena
+};
+
 async function robot() {
-  console.log("> [video-generator] Iniciando Director de Video con Veo 3.1...");
+  console.log("> [video-generator] 🛡️ Iniciando Director de Video (AUDIT MODE ACTIVE)...");
   
   const sharedPath = path.resolve('./content/shared');
   const outputPath = path.resolve('./content/v3_narrativo');
   const scriptPath = path.join(sharedPath, 'script.json');
 
   if (!fs.existsSync(scriptPath)) {
-    console.error("> [video-generator] ❌ Error: Faltan script.json en content/shared/. Ejecuta el guionista primero.");
-    return;
+    console.error("> [video-generator] ❌ Error: Faltan script.json. Ejecuta el guionista primero.");
+    process.exit(1);
   }
 
   const lyrics = JSON.parse(fs.readFileSync(scriptPath, 'utf8'));
   console.log(`> [video-generator] Guion Técnico cargado con ${lyrics.length} escenas.`);
+
+  if (AUDIT_CONFIG.TEST_MODE) {
+    console.log("> [video-generator] ⚠️ MODO PRUEBA ACTIVO: Solo se procesará la primera escena faltante.");
+  }
 
   for (let i = 0; i < lyrics.length; i++) {
     const scene = lyrics[i];
@@ -30,14 +48,16 @@ async function robot() {
     }
 
     console.log(`\n> [video-generator] 🎬 Filmando Escena ${i}/${lyrics.length}: "${scene.text}"`);
-    console.log(`> [video-generator] 📜 Prompt: ${scene.prompt}`);
     
-    const prompt = scene.prompt;
+    let prompt = scene.prompt;
+    if (scene.singing) {
+      prompt += ", close-up shot, looking at camera, singing, lips moving clearly, cinematic lighting, high detail face";
+    }
     
     let success = false;
     let attempts = 0;
 
-    while (!success && attempts < 3) {
+    while (!success && attempts < AUDIT_CONFIG.MAX_RETRIES) {
       try {
         console.log(`> [video-generator] Enviando orden a Google Veo 3.1 (Intento ${attempts + 1})...`);
         let operation = await ai.models.generateVideos({
@@ -49,8 +69,8 @@ async function robot() {
         });
 
         while (!operation.done) {
-          console.log(`> [video-generator] Renderizando clip ${i}... (esperando 15s)`);
-          await new Promise((resolve) => setTimeout(resolve, 15000));
+          console.log(`> [video-generator] Renderizando clip ${i}... (esperando ${AUDIT_CONFIG.POLLING_INTERVAL/1000}s)`);
+          await new Promise((resolve) => setTimeout(resolve, AUDIT_CONFIG.POLLING_INTERVAL));
           operation = await ai.operations.getVideosOperation({
             operation: operation,
           });
@@ -58,9 +78,9 @@ async function robot() {
 
         console.log(`> [video-generator] ✅ Clip ${i} generado. Descargando...`);
         if (!operation.response || !operation.response.generatedVideos || !operation.response.generatedVideos[0]) {
-          console.error("> [video-generator] DETALLES DE RESPUESTA:", JSON.stringify(operation, null, 2));
-          throw new Error("La respuesta de Veo no contiene generatedVideos. (Posible bloqueo de seguridad por el prompt 'aggressive').");
+          throw new Error("Respuesta inválida de Veo (posible bloqueo de seguridad).");
         }
+
         await ai.files.download({
           file: operation.response.generatedVideos[0].video,
           downloadPath: clipPath,
@@ -69,27 +89,34 @@ async function robot() {
         console.log(`> [video-generator] 💾 Guardado como clip_${i}.mp4`);
         success = true;
         
-        // "Iteración tranquila" para evitar Rate Limits
-        console.log("> [video-generator] Descansando 30 segundos antes de la siguiente escena para respetar límites de cuota...");
-        await new Promise((resolve) => setTimeout(resolve, 30000));
-        
       } catch (error) {
+        const errorMsg = error.message.toLowerCase();
         console.error(`> [video-generator] ❌ Error en escena ${i}:`, error.message);
-        attempts++;
-        if (error.message.includes("429") || error.message.includes("quota")) {
-          console.log("> [video-generator] ⏳ Límite de cuota alcanzado. Esperando 2 minutos antes de reintentar...");
-          await new Promise((resolve) => setTimeout(resolve, 120000)); // Esperar 2 minutos
-        } else {
-          console.log("> [video-generator] ⏳ Esperando 30 segundos antes de reintentar...");
-          await new Promise((resolve) => setTimeout(resolve, 30000));
+
+        // FRENO DE MANO DE EMERGENCIA (429 = Quota, 403 = Billing/Forbidden)
+        if (errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("403")) {
+          console.error("> [video-generator] 🚨 LÍMITE DE CUOTA O ERROR DE FACTURACIÓN DETECTADO. ABORTANDO TODO PARA EVITAR GASTOS.");
+          process.exit(1);
         }
+
+        attempts++;
+        console.log(`> [video-generator] ⏳ Esperando ${AUDIT_CONFIG.COOLDOWN_TIME/1000}s antes de reintentar...`);
+        await new Promise((resolve) => setTimeout(resolve, AUDIT_CONFIG.COOLDOWN_TIME));
       }
     }
     
-    if (!success) {
-      console.error(`> [video-generator] 🚨 Abortando. No se pudo generar la escena ${i} después de 3 intentos.`);
-      break; // Salir si falla mucho para no gastar recursos
+    if (success && AUDIT_CONFIG.TEST_MODE) {
+      console.log("> [video-generator] ✅ Modo Prueba completado con éxito. Deteniendo ejecución.");
+      break; 
     }
+
+    if (!success) {
+      console.error(`> [video-generator] 🚨 No se pudo generar la escena ${i}. Abortando para revisión.`);
+      process.exit(1);
+    }
+
+    console.log(`> [video-generator] Descansando ${AUDIT_CONFIG.COOLDOWN_TIME/1000}s para respetar límites...`);
+    await new Promise((resolve) => setTimeout(resolve, AUDIT_CONFIG.COOLDOWN_TIME));
   }
 }
 

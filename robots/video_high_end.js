@@ -5,7 +5,7 @@ const rootPath = path.resolve(__dirname, '..')
 const fromRoot = relPath => path.resolve(rootPath, relPath)
 
 async function robot() {
-  console.log('> [video-v2-documental] Iniciando Motor de Animación Cinemática 2D (Ken Burns)...')
+  console.log('> [video-high-end] 🚀 Iniciando Motor de Renderizado de Alta Gama...')
   
   const ffmpegPath = require('ffmpeg-static')
   const sharedDir = fromRoot('./content/shared')
@@ -17,18 +17,12 @@ async function robot() {
   const audioPath = audioFile ? path.join(sharedDir, audioFile) : null
 
   if (!fs.existsSync(lyricsPath) || !audioPath) {
-    console.error('> [video-v2-documental] ❌ Error: Faltan lyrics.json o el audio en content/shared.')
+    console.error('> [video-high-end] ❌ Error: Faltan archivos necesarios.')
     return
   }
 
   const images = files.filter(f => f.toLowerCase().endsWith('.jpg') || f.toLowerCase().endsWith('.png') || f.toLowerCase().endsWith('.jpeg'))
-  if (images.length === 0) {
-    console.error('> [video-v2-documental] ❌ Error: No hay imágenes en la carpeta content/shared/.')
-    return
-  }
   
-  console.log(`> [video-v2-documental] ¡Encontradas ${images.length} fotos base para animar!`)
-
   const data = JSON.parse(fs.readFileSync(lyricsPath, 'utf8'))
   const lyrics = data.lyrics || data
   const listFilePath = path.join(outputDir, 'concat_list.txt')
@@ -36,33 +30,28 @@ async function robot() {
   
   let srtContent = ''
   let concatList = ''
-  let clipCount = 0
 
   for (let i = 0; i < lyrics.length; i++) {
     const scene = lyrics[i]
     const imageToUse = images[i % images.length]
     const imagePath = path.join(sharedDir, imageToUse)
-    const clipPath = path.join(outputDir, `animated_${i}.mp4`)
+    const clipPath = path.join(outputDir, `high_end_${i}.mp4`)
     
     let duration = (scene.end - scene.start).toFixed(2)
     if (parseFloat(duration) <= 0.1) duration = "5.00";
     
-    console.log(`> [video-v2-documental] Animando foto [${imageToUse}] para la escena ${i} (${duration}s)...`)
-    await animateImage(ffmpegPath, imagePath, clipPath, duration, i)
+    console.log(`> [video-high-end] Procesando escena ${i} con estética cinematográfica...`)
+    await animateImageHighEnd(ffmpegPath, imagePath, clipPath, duration, i)
     
     concatList += `file '${clipPath.replace(/\\/g, '/')}'\n`
-    clipCount++
-
-    const startSrt = formatTime(scene.start)
-    const endSrt = formatTime(scene.end)
-    srtContent += `${i + 1}\n${startSrt} --> ${endSrt}\n${scene.text.toUpperCase()}\n\n`
+    srtContent += `${i + 1}\n${formatTime(scene.start)} --> ${formatTime(scene.end)}\n${scene.text.toUpperCase()}\n\n`
   }
 
   fs.writeFileSync(listFilePath, concatList)
   fs.writeFileSync(subFilePath, srtContent)
 
-  console.log('> [video-v2-documental] 🎬 Uniendo pistas de video, audio original y quemando Subtítulos Karaoke...')
-  const finalOutputPath = path.join(outputDir, 'FINAL_MUSIC_VIDEO_DOCUMENTAL.mp4')
+  console.log('> [video-high-end] 🎬 Ensamblaje final con Color Grading y Texturas...')
+  const finalOutputPath = path.join(outputDir, 'HIGH_END_MUSIC_VIDEO.mp4')
   const srtRelative = subFilePath.replace(/\\/g, '/').replace('C:', 'C\\:')
   
   await new Promise((resolve, reject) => {
@@ -72,50 +61,54 @@ async function robot() {
       '-safe', '0',
       '-i', listFilePath,
       '-i', audioPath,
-      '-vf', `subtitles='${srtRelative}':force_style='Fontname=Impact,FontSize=42,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3'`,
+      '-vf', `subtitles='${srtRelative}':force_style='Fontname=Oswald,FontSize=36,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2'`,
       '-c:v', 'libx264',
-      '-preset', 'fast',
+      '-preset', 'slow',
       '-crf', '18',
       '-c:a', 'aac',
-      '-b:a', '192k',
+      '-b:a', '256k',
       '-shortest',
       finalOutputPath
     ]
 
     const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs)
-
     ffmpegProcess.on('close', (code) => {
-      if (code === 0) {
-        console.log(`\n> [video-v2-documental] 🎉 ¡VIDEOCLIP CREADO CON ÉXITO! Guardado en: ${finalOutputPath}`)
-        resolve()
-      } else {
-        console.error(`> [video-v2-documental] ❌ Error en render final FFmpeg.`)
-        reject(new Error(`FFmpeg exited with code ${code}`))
-      }
+      if (code === 0) resolve()
+      else reject(new Error(`Final assembly failed`))
     })
   })
+  console.log(`> [video-high-end] 🎉 ¡VIDEO DE ALTA GAMA LISTO! -> ${finalOutputPath}`)
 }
 
-function animateImage(ffmpegPath, inputImage, outputVideo, duration, index) {
+function animateImageHighEnd(ffmpegPath, inputImage, outputVideo, duration, index) {
   return new Promise((resolve, reject) => {
     const frames = Math.ceil(parseFloat(duration) * 25);
     const effects = [
-      `zoompan=z='min(zoom+0.0015,1.5)':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
-      `zoompan=z='max(1.5-0.0015*on,1)':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
-      `zoompan=z=1.2:d=${frames}:x='x+1':y='ih/2-(ih/zoom/2)'`,
-      `zoompan=z=1.2:d=${frames}:x='iw/2-(iw/zoom/2)':y='y+1'`
+      `zoompan=z='min(zoom+0.001,1.3)':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,
+      `zoompan=z='max(1.3-0.001*on,1)':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`
     ];
     
     const selectedEffect = effects[index % effects.length];
+    
+    // Filtros de Alta Gama: Color Grading + Vignette + Grain
+    const highEndFilters = [
+      `scale=3840:-1`, // Super sampling
+      selectedEffect,
+      `scale=1920:1080,crop=1920:1080`,
+      `curves=vintage`, // Color grading estilo vintage
+      `vignette=PI/4`,  // Viñeteado cinematográfico
+      `noise=alls=7:allf=t+u`, // Grano de película sutil
+      `unsharp=3:3:1.5` // Enfoque extra
+    ].join(',');
 
     const ffmpegArgs = [
       '-y',
       '-loop', '1',
       '-i', inputImage,
       '-t', duration,
-      '-vf', `scale=8000:-1,${selectedEffect},scale=1920:1080,crop=1920:1080`,
+      '-vf', highEndFilters,
       '-c:v', 'libx264',
-      '-preset', 'ultrafast',
+      '-preset', 'medium',
       '-pix_fmt', 'yuv420p',
       outputVideo
     ]
@@ -123,7 +116,7 @@ function animateImage(ffmpegPath, inputImage, outputVideo, duration, index) {
     const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs)
     ffmpegProcess.on('close', (code) => {
       if (code === 0) resolve()
-      else reject(new Error(`Animation failed for ${inputImage}`))
+      else reject(new Error(`Scene ${index} failed`))
     })
   })
 }
